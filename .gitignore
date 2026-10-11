@@ -26,3 +26,13 @@ Thumbs.db
 
 # Eclipse Workspace
 .metadata/
+# IntelliJ
+.idea/
+*.iml
+
+# Maven
+**/target/
+
+# Configuraciones privadas
+**/application-local.yml
+**/.env
