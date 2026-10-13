@@ -1,13 +1,12 @@
 package pe.cibertec.auth_service.service;
 
-import java.util.Optional;
-
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import lombok.RequiredArgsConstructor;
-import pe.cibertec.auth_service.dto.LoginRequest;
-import pe.cibertec.auth_service.dto.RegisterRequest;
+import pe.cibertec.auth_service.dto.*;
 import pe.cibertec.auth_service.entity.Usuario;
 import pe.cibertec.auth_service.repository.UsuarioRepository;
 
@@ -17,49 +16,40 @@ public class AuthService {
 
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
-    
+    private final JwtService jwtService;
 
     public String register(RegisterRequest request) {
-
-        Optional<Usuario> usuarioExistente =
-                usuarioRepository.findByUsername(request.getUsername());
-
-        if(usuarioExistente.isPresent()) {
+        if (usuarioRepository.findByUsername(request.getUsername()).isPresent()) {
             return "El usuario ya existe";
         }
 
         Usuario usuario = new Usuario();
-
         usuario.setUsername(request.getUsername());
-
-        usuario.setPassword(
-                passwordEncoder.encode(request.getPassword()));
-
+        usuario.setPassword(passwordEncoder.encode(request.getPassword()));
         usuario.setRol(request.getRol());
 
         usuarioRepository.save(usuario);
-
         return "Usuario registrado correctamente";
     }
 
-    public String login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request) {
+        Usuario usuario = usuarioRepository
+                .findByUsername(request.getUsername())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED, "Credenciales incorrectas"
+                ));
 
-        Optional<Usuario> usuario =
-                usuarioRepository.findByUsername(request.getUsername());
-
-        if(usuario.isEmpty()) {
-            return "Usuario no encontrado";
+        if (!passwordEncoder.matches(request.getPassword(), usuario.getPassword())) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED, "Credenciales incorrectas"
+            );
         }
 
-        boolean passwordCorrecto =
-                passwordEncoder.matches(
-                        request.getPassword(),
-                        usuario.get().getPassword());
-
-        if(passwordCorrecto) {
-            return "Login correcto";
-        }
-
-        return "Contraseña incorrecta";
+        return new AuthResponse(
+                "Login correcto",
+                jwtService.generarToken(usuario),
+                usuario.getUsername(),
+                usuario.getRol()
+        );
     }
 }

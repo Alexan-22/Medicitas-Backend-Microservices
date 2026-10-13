@@ -18,6 +18,9 @@ public class Paciente {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "usuario_id", unique = true)
+    private Long usuarioId;
+
     @Column(unique = true)
     private String dni;
 
@@ -42,4 +45,6 @@ public class Paciente {
     private String estado;
 
     private LocalDateTime fechaRegistro;
+
+
 }
