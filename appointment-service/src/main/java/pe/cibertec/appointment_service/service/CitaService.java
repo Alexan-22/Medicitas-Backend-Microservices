@@ -39,7 +39,7 @@ public class CitaService {
     private final MedicoClient medicoClient;
     private final NotificationClient notificationClient;
 
-    // CONSULTAS
+    // CONSULTAS GENERALES
     public List<Cita> listar() {
         return repository.findAll();
     }
@@ -60,12 +60,9 @@ public class CitaService {
         return crearDetalle(buscarPorId(id));
     }
 
-    // MIS CITAS: el paciente se obtiene usando su token.
+    // CITAS DEL PACIENTE AUTENTICADO
     public List<CitaDetalleDTO> listarMisCitas(String token) {
-        if (token == null || token.isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED, "Se requiere autenticación");
-        }
+        validarToken(token);
 
         PacienteDTO paciente;
 
@@ -100,6 +97,58 @@ public class CitaService {
                 .stream()
                 .map(this::crearDetalle)
                 .toList();
+    }
+
+    // CITAS DEL MÉDICO AUTENTICADO
+    public List<CitaDetalleDTO> listarMisCitasMedico(String token) {
+        validarToken(token);
+
+        MedicoDTO medico;
+
+        try {
+            medico = medicoClient.obtenerMiPerfil("Bearer " + token);
+        } catch (FeignException exception) {
+            if (exception.status() == 404) {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Esta cuenta no tiene un médico vinculado");
+            }
+
+            if (exception.status() == 401) {
+                throw new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "No se pudo validar la sesión del médico");
+            }
+
+            if (exception.status() == 403) {
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "La cuenta no tiene permiso para consultar el perfil médico");
+            }
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "No se pudo consultar el servicio de médicos");
+        }
+
+        if (medico == null || medico.getId() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "El servicio de médicos devolvió un perfil no válido");
+        }
+
+        return repository
+                .findByMedicoIdOrderByFechaDescHoraDesc(medico.getId())
+                .stream()
+                .map(this::crearDetalle)
+                .toList();
+    }
+
+    private void validarToken(String token) {
+        if (token == null || token.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED, "Se requiere autenticación");
+        }
     }
 
     private CitaDetalleDTO crearDetalle(Cita cita) {
@@ -358,4 +407,41 @@ public class CitaService {
         return ((nombres == null ? "" : nombres)
                 + " " + (apellidos == null ? "" : apellidos)).trim();
     }
+    public void validarAccesoMedico(Long citaId, String token) {
+        validarToken(token);
+        Cita cita = buscarPorId(citaId);
+        MedicoDTO medico;
+
+        try {
+            medico = medicoClient.obtenerMiPerfil("Bearer " + token);
+        } catch (FeignException exception) {
+            if (exception.status() == 404) {
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "La cuenta no tiene un médico vinculado");
+            }
+
+            if (exception.status() == 401 || exception.status() == 403) {
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "No se pudo autorizar al médico");
+            }
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "No se pudo consultar el servicio de médicos");
+        }
+
+        if (medico == null || medico.getId() == null
+                || !Objects.equals(cita.getMedicoId(), medico.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "No tienes permiso para acceder a esta cita");
+        }
+    }
+
+    public Long contarTodas() {
+        return repository.count();
+    }
 }
+

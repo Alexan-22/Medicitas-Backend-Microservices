@@ -7,4 +7,6 @@ import pe.cibertec.patient_service.entity.Paciente;
 public interface PacienteRepository extends JpaRepository<Paciente, Long> {
 	long countByEstado(String estado);
 	Optional<Paciente> findByUsuarioId(Long usuarioId);
+	boolean existsByUsuarioId(Long usuarioId);
+	boolean existsByDni(String dni);
 }
